@@ -259,6 +259,9 @@ body.noturno .av-card{border-left-color:#8ED13B!important}
 body.noturno .aba.ativa{background:#8ED13B!important;color:#0A3D17!important;border-color:#8ED13B!important}
 .nav-secoes{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .nav-secoes .btn{min-width:0}
+.nav-secoes{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:8px;padding:8px 0 10px;margin-bottom:12px;background:#F3F7F2}
+body.noturno .nav-secoes{background:#07140C}
+.nav-secoes .pill-nav{border:2px solid #06290F!important;padding:0 14px;height:36px;display:inline-flex;align-items:center}
 </style>
 </head>
 <body>
@@ -324,8 +327,7 @@ body.noturno .aba.ativa{background:#8ED13B!important;color:#0A3D17!important;bor
 
 <section id="portaria" class="tela">
   <div class="wrap">
-    <div class="nav-secoes"><button class="btn cinza peq" onclick="irSecao('sec-ph-registro')">Registro de entrada</button><button class="btn cinza peq" onclick="irSecao('sec-ph-busca')">Buscar morador</button><button class="btn cinza peq" onclick="irSecao('sec-ph-hist')">Histórico dos acessos</button><button class="btn cinza peq" onclick="irSecao('ph-hist-av-wrap')">Histórico de avisos</button></div>
-    <div id="p-ultimas"></div>
+        <div id="p-ultimas"></div>
     <div class="card">
       <h2 id="sec-ph-registro">Registro de Entrada — Visitante / Prestador</h2>
       <p class="sub">Informe o nome, selecione o assunto, localize o morador e registre os dados de acesso.</p>
@@ -363,8 +365,7 @@ body.noturno .aba.ativa{background:#8ED13B!important;color:#0A3D17!important;bor
 </section>
 
 <section id="central" class="tela">
-  <div class="nav-secoes"><button class="btn cinza peq" onclick="irSecao('fila-topo')">Solicitações</button><button class="btn cinza peq" onclick="irSecao('sec-ch-busca')">Buscar morador</button><button class="btn cinza peq" onclick="irSecao('sec-ch-hist')">Histórico dos acessos</button><button class="btn cinza peq" onclick="irSecao('ch-hist-av-wrap')">Histórico de avisos</button></div>
-<div class="wrap">
+  <div class="wrap">
     <div id="fila-topo"></div>
     <div class="card">
       <h2 id="c-titulo">Buscar morador</h2>
@@ -390,8 +391,7 @@ body.noturno .aba.ativa{background:#8ED13B!important;color:#0A3D17!important;bor
 
 <section id="cadastros" class="tela">
   <div class="wrap">
-    <div class="nav-secoes"><button class="btn cinza peq" onclick="irSecao('cad-hist-av-wrap')">Histórico de avisos</button></div>
-    <div id="cad-hist-av-wrap"></div>
+        <div id="cad-hist-av-wrap"></div>
   </div>
 </section>
 
@@ -658,6 +658,7 @@ function qdLtDe(r){
 }
 function mostrar(id){
   document.querySelectorAll('.tela').forEach(t => t.classList.toggle('ativa', t.id === id));
+  if (ABAS_TELA[id]) trocarAbaTela(id, +($(id).dataset.aba || 0));
   $('cab').classList.toggle('ativa', !['splash', 'login'].includes(id));
   const navAtivo = { portaria: 'nav-visitante', central: 'nav-blindada', admin: 'nav-admin', cadastros: 'nav-cadastros' }[id];
   ['nav-visitante', 'nav-blindada', 'nav-admin', 'nav-cadastros'].forEach(n => $(n).classList.toggle('ativo', n === navAtivo));
@@ -852,6 +853,52 @@ function copiarCpf(){
   try { navigator.clipboard.writeText(txt); toast('CPF copiado.'); }
   catch (e) { toast('Não consegui copiar. Selecione o número e copie.'); }
 }
+
+// ===== Abas das telas: cada botão mostra só o seu campo (botões fixos no topo) =====
+const cartaoDe = id => { const el = $(id); return el ? el.closest('.card') : null; };
+const ABAS_TELA = {
+  portaria: [
+    { rotulo: 'Registro de entrada', itens: () => [cartaoDe('p-nome'), $('p-ultimas')] },
+    { rotulo: 'Buscar morador', itens: () => [cartaoDe('v-busca')] },
+    { rotulo: 'Histórico dos acessos', itens: () => [cartaoDe('p-hist')] },
+    { rotulo: 'Histórico de avisos', itens: () => [$('ph-hist-av-wrap')] }
+  ],
+  central: [
+    { rotulo: 'Solicitações', itens: () => [$('fila-topo'), $('c-area')] },
+    { rotulo: 'Buscar morador', itens: () => [cartaoDe('c-busca'), $('c-area')] },
+    { rotulo: 'Histórico dos acessos', itens: () => [cartaoDe('c-hist')] },
+    { rotulo: 'Histórico de avisos', itens: () => [$('ch-hist-av-wrap')] }
+  ],
+  cadastros: [
+    { rotulo: 'Histórico de avisos', itens: () => [$('cad-hist-av-wrap')] }
+  ]
+};
+function montarAbasTela(){
+  Object.keys(ABAS_TELA).forEach(secao => {
+    const sec = $(secao);
+    if (!sec) return;
+    const wrap = sec.querySelector('.wrap') || sec;
+    let nav = wrap.querySelector(':scope > .nav-secoes');
+    if (!nav) { nav = document.createElement('div'); nav.className = 'nav-secoes'; wrap.insertBefore(nav, wrap.firstChild); }
+    nav.innerHTML = ABAS_TELA[secao].map((a, i) => `<button class="pill-nav" data-i="${i}">${a.rotulo}</button>`).join('');
+    nav.querySelectorAll('button').forEach(b => { b.onclick = () => trocarAbaTela(secao, +b.dataset.i); });
+    // o atendimento fica junto da busca, sem estar dentro do card de busca
+    const cb = cartaoDe('c-busca'), area = $('c-area');
+    if (cb && area && area.parentElement === wrap && area.previousElementSibling !== cb) cb.insertAdjacentElement('afterend', area);
+    trocarAbaTela(secao, +(sec.dataset.aba || 0));
+  });
+}
+function trocarAbaTela(secao, i){
+  const sec = $(secao);
+  const abas = ABAS_TELA[secao];
+  if (!sec || !abas || !abas[i]) return;
+  const todos = new Set();
+  abas.forEach(a => a.itens().forEach(el => { if (el) todos.add(el); }));
+  const ativos = new Set(abas[i].itens().filter(Boolean));
+  todos.forEach(el => el.classList.toggle('oculto', !ativos.has(el)));
+  sec.querySelectorAll('.nav-secoes button').forEach((b, k) => b.classList.toggle('ativo', k === i));
+  sec.dataset.aba = i;
+}
 // Enter passa para o próximo campo do formulário (campos de busca com lista continuam como estavam)
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.isComposing || e.defaultPrevented) return;
@@ -871,6 +918,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('DOMContentLoaded', () => {
   montarHistAvisos();
+  montarAbasTela();
   $('p-obs').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('btn-enviar').focus(); }
   });
