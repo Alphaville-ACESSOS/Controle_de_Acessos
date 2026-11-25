@@ -252,6 +252,11 @@ body.noturno .sit-fin{color:#FF7A7A}
 .opc-filtro:hover{background:#E8F5E9}
 body.noturno .menu-filtro{background:#10261A;color:#FFFFFF;border-color:#2A4A35}
 body.noturno .opc-filtro:hover{background:#1E4A2C}
+
+.av-card{border-left:6px solid #8ED13B!important}
+body.noturno .av-card{border-left-color:#8ED13B!important}
+.aba.ativa{background:#8ED13B!important;color:#0A3D17!important;border-color:#8ED13B!important}
+body.noturno .aba.ativa{background:#8ED13B!important;color:#0A3D17!important;border-color:#8ED13B!important}
 </style>
 </head>
 <body>
@@ -1468,6 +1473,13 @@ async function decidir(status){
   }
 }
 function buscarVisitante(){
+  // Campo apagado: limpa a lista e a consulta do morador
+  if (!$('v-busca').value.trim()) {
+    $('v-res').innerHTML = '';
+    $('v-det').classList.add('oculto');
+    $('v-det').innerHTML = '';
+    return;
+  }
   renderLista('v-res', $('v-busca').value, null, 'verContatosVisitante');
 }
 function verContatosVisitante(id){
@@ -1874,7 +1886,10 @@ async function finalizarAviso(prot){
     renderAvisos();
   } catch (e) { toast('Erro: ' + e.message); }
 }
-function irCadastros(){ mostrar('cadastros'); }
+function irCadastros(){
+  $('local').textContent = portaria ? 'Portaria ' + portaria + ' - Cadastros' : 'Cadastros';
+  mostrar('cadastros');
+}
 
 // Janela de novo aviso
 let avSel = null;
