@@ -240,6 +240,18 @@ body.noturno #c-det .caixa label{color:#FFFFFF!important}
 
 .cb-linha{display:flex;align-items:center;gap:8px;margin:8px 0}
 .cb-linha input[type=checkbox]{width:auto;margin:0;flex:0 0 auto;height:auto}
+
+.caixa-endereco{border:2px solid #8ED13B;background:#E8F5E9;color:#0A3D17;border-radius:12px;padding:10px 14px;font-size:1.15rem;font-weight:800;margin:6px 0 4px}
+body.noturno .caixa-endereco{background:#2E5D3A;color:#FFFFFF;border-color:#8ED13B}
+.sit-ativo{color:#2E9E4A;font-weight:800}
+.sit-fin{color:#D32F2F;font-weight:800}
+body.noturno .sit-ativo{color:#A8F0B8}
+body.noturno .sit-fin{color:#FF7A7A}
+.menu-filtro{position:absolute;z-index:50;top:100%;left:0;margin-top:4px;background:#FFFFFF;color:#0A3D17;border:1px solid #cfd8d2;border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.25);min-width:220px;overflow:hidden}
+.opc-filtro{padding:10px 14px;cursor:pointer;font-weight:600}
+.opc-filtro:hover{background:#E8F5E9}
+body.noturno .menu-filtro{background:#10261A;color:#FFFFFF;border-color:#2A4A35}
+body.noturno .opc-filtro:hover{background:#1E4A2C}
 </style>
 </head>
 <body>
@@ -380,6 +392,14 @@ body.noturno #c-det .caixa label{color:#FFFFFF!important}
     <div class="card">
       <h2>Histórico de avisos</h2>
       <p class="sub">Todos os avisos registrados, ativos e finalizados. Use a busca para localizar por morador, QD/LT, endereço, setor, operador ou observação.</p>
+      <div style="position:relative;display:inline-block;margin-bottom:10px">
+        <button class="btn cinza peq" id="cad-filtro-btn" onclick="alternarFiltroCad()">Mostrar: Todos &#9662;</button>
+        <div id="cad-filtro-menu" class="menu-filtro oculto">
+          <div class="opc-filtro" onclick="escolherFiltroCad('ativos')">Somente ativos</div>
+          <div class="opc-filtro" onclick="escolherFiltroCad('finalizados')">Somente finalizados</div>
+          <div class="opc-filtro" onclick="escolherFiltroCad('todos')">Todos</div>
+        </div>
+      </div>
       <input id="cad-busca" placeholder="Buscar aviso: morador, QD/LT, endereço, setor ou observação..." oninput="renderCadastroAvisos()" style="margin-bottom:10px">
       <div class="rolagem" id="cad-avisos"></div>
     </div>
@@ -861,6 +881,9 @@ document.addEventListener('keydown', e => {
   if (prox.select && prox.tagName === 'INPUT' && prox.type === 'text') prox.select();
 });
 document.addEventListener('DOMContentLoaded', () => {
+  $('p-obs').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('btn-enviar').focus(); }
+  });
   ligarTeclado('c-busca', 'c-res');
   ligarTeclado('p-busca', 'p-lista');
   ligarTeclado('v-busca', 'v-res');
@@ -1327,7 +1350,9 @@ function renderDet(){
         <span>${d.ligados.includes(i) ? '<span class="pill liberado">Ligado ✔</span> ' : ''}${!d.comLigar ? '' : ehFixo(t.tel) ? `<a class="btn wa peq" href="tel:+55${soDigitos(t.tel)}" style="text-decoration:none">Ligar</a>` : `<button class="btn msg peq" onclick="mensagem(${i})">Mensagem</button> <button class="btn wa peq" onclick="ligar(${i})">Ligar</button>`}</span>
       </div>`).join('')
     : '<p class="mini">Este morador não tem telefone cadastrado.</p>';
-  const topo = d.tipo === 'prot'
+  const topo = d.consulta
+    ? `<div class="caixa-endereco">${esc(d.end || (d.morador && d.morador.Endereco) || '')} · ${esc(d.morador ? qdLtDe(d.morador) : pq(d.qd) + ' ' + pq(d.lt))}</div>`
+    : d.tipo === 'prot'
     ? `<h2>${esc(d.visitante)}</h2>
        <p><strong>${esc(d.assunto)}</strong></p>
        <p class="mini">Protocolo ${esc(d.protocolo)}${d.obsPortaria ? ' · Obs. da portaria: ' + esc(d.obsPortaria) : ''}</p>`
@@ -1452,7 +1477,7 @@ function verContatosVisitante(id){
     <small class="mini">${esc(t.rotulo)} · ${esc(r['Endereco'])} · ${esc(qdLtDe(r))}</small></span></div>`).join('')
     || '<p class="mini">Este morador não tem telefone cadastrado.</p>';
   const det = $('v-det');
-  det.innerHTML = `<h2>${esc(nomesDe(r))}</h2><p class="mini">${esc(r['Endereco'])} · ${esc(qdLtDe(r))}</p>
+  det.innerHTML = `<div class="caixa-endereco">${esc(r['Endereco'])} · ${esc(qdLtDe(r))}</div>
     <div style="margin-top:12px">${linhas}</div>`;
   det.classList.remove('oculto');
 }
@@ -1894,6 +1919,7 @@ function escolherMoradorAviso(id){
   $('av-busca').value = '';
   $('av-info').textContent = '';
   buscarMoradorAviso();
+  setTimeout(() => $('av-obs').focus(), 0);
 }
 function trocarMoradorAviso(){
   avSel = null;
@@ -1924,11 +1950,23 @@ async function salvarAviso(){
 
 // Gestão de avisos (administrador)
 // Histórico de avisos (tela Cadastros): busca por qualquer parte do aviso
+let cadFiltro = 'todos';
+function alternarFiltroCad(){ $('cad-filtro-menu').classList.toggle('oculto'); }
+function escolherFiltroCad(v){
+  cadFiltro = v;
+  const nomes = { todos: 'Todos', ativos: 'Ativos', finalizados: 'Finalizados' };
+  $('cad-filtro-btn').innerHTML = 'Mostrar: ' + nomes[v] + ' &#9662;';
+  $('cad-filtro-menu').classList.add('oculto');
+  renderCadastroAvisos();
+}
 function renderCadastroAvisos(){
   const el = $('cad-avisos');
   if (!el) return;
   const t = semAcento($('cad-busca') ? $('cad-busca').value : '').trim().replace(/\s+/g, ' ');
   const lista = (dados.avisos || []).slice().reverse().filter(a => {
+    const fin = ['FINALIZADO', 'EXCLUIDO'].includes(String(a['Status'] || '').toUpperCase());
+    if (cadFiltro === 'ativos' && fin) return false;
+    if (cadFiltro === 'finalizados' && !fin) return false;
     if (!t) return true;
     const campos = [a['Portaria'], a['Morador Nome'], a['QD'], a['LT'], pq(a['QD']) + ' ' + pq(a['LT']), a['Endereco'],
       a['Setor'], a['Operador'], a['Observacao'], a['Status']].join(' ').toLowerCase();
@@ -1938,7 +1976,7 @@ function renderCadastroAvisos(){
     ? `<table><tr><th>Data</th><th>Portaria</th><th>Setor</th><th>Operador</th><th>Morador</th><th>Observação</th><th>Situação</th></tr>
        ${lista.map(a => `<tr><td>${esc(a['Data/Hora'])}</td><td>${esc(a['Portaria'])}</td><td>${esc(a['Setor'])}</td><td>${esc(a['Operador'])}</td>
          <td>${esc(curto(a['Morador Nome']))}<br><small class="mini">QD ${esc(pq(a['QD']))} / LT ${esc(pq(a['LT']))}</small></td>
-         <td>${esc(a['Observacao'])}</td><td>${String(a['Status']).toUpperCase() === 'FINALIZADO' ? 'Finalizado' : 'Ativo'}</td></tr>`).join('')}</table>`
+         <td>${esc(a['Observacao'])}</td><td>${['FINALIZADO', 'EXCLUIDO'].includes(String(a['Status']).toUpperCase()) ? '<span class="sit-fin">' + (String(a['Status']).toUpperCase() === 'EXCLUIDO' ? 'Excluído' : 'Finalizado') + '</span>' : '<span class="sit-ativo">Ativo</span>'}</td></tr>`).join('')}</table>`
     : '<p class="mini">Nenhum aviso encontrado.</p>';
 }
 // Lista de todos os avisos da portaria (todos os setores), últimos 3 dias
