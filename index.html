@@ -257,6 +257,8 @@ body.noturno .opc-filtro:hover{background:#1E4A2C}
 body.noturno .av-card{border-left-color:#8ED13B!important}
 .aba.ativa{background:#8ED13B!important;color:#0A3D17!important;border-color:#8ED13B!important}
 body.noturno .aba.ativa{background:#8ED13B!important;color:#0A3D17!important;border-color:#8ED13B!important}
+.nav-secoes{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.nav-secoes .btn{min-width:0}
 </style>
 </head>
 <body>
@@ -322,9 +324,10 @@ body.noturno .aba.ativa{background:#8ED13B!important;color:#0A3D17!important;bor
 
 <section id="portaria" class="tela">
   <div class="wrap">
+    <div class="nav-secoes"><button class="btn cinza peq" onclick="irSecao('sec-ph-registro')">Registro de entrada</button><button class="btn cinza peq" onclick="irSecao('sec-ph-busca')">Buscar morador</button><button class="btn cinza peq" onclick="irSecao('sec-ph-hist')">Histórico dos acessos</button><button class="btn cinza peq" onclick="irSecao('ph-hist-av-wrap')">Histórico de avisos</button></div>
     <div id="p-ultimas"></div>
     <div class="card">
-      <h2>Registro de Entrada — Visitante / Prestador</h2>
+      <h2 id="sec-ph-registro">Registro de Entrada — Visitante / Prestador</h2>
       <p class="sub">Informe o nome, selecione o assunto, localize o morador e registre os dados de acesso.</p>
       <label for="p-nome">Nome: *</label>
       <input id="p-nome" placeholder="Visitante / Prestador">
@@ -343,28 +346,25 @@ body.noturno .aba.ativa{background:#8ED13B!important;color:#0A3D17!important;bor
       </div>
     </div>
     <div class="card">
-      <h2>Buscar morador</h2>
+      <h2 id="sec-ph-busca">Buscar morador</h2>
       <p class="sub">Procure um morador como numa lista telefônica para ver os números de contato. Aqui não há ligação.</p>
       <input id="v-busca" placeholder="Nome, QD, LT ou endereço..." oninput="buscarVisitante()">
       <div id="v-res" class="lista"></div>
       <div id="v-det" class="oculto" style="margin-top:12px"></div>
     </div>
     <div class="card">
-      <h2>Histórico dos últimos acessos</h2>
+      <h2 id="sec-ph-hist">Histórico dos últimos acessos</h2>
       <p class="sub">Acessos já finalizados pela Central Blindada nesta portaria.</p>
       <input id="p-hist-busca" placeholder="Pesquisar: nome, QD, LT, endereço ou serviço..." oninput="renderHistorico()" style="margin-bottom:10px">
       <div class="rolagem" id="p-hist"></div>
     </div>
-    <div class="card">
-      <h2>Avisos da portaria</h2>
-      <p class="sub">Avisos de todos os setores nos últimos 3 dias.</p>
-      <div class="rolagem" id="p-avisos-todos"></div>
-    </div>
+    <div id="ph-hist-av-wrap"></div>
   </div>
 </section>
 
 <section id="central" class="tela">
-  <div class="wrap">
+  <div class="nav-secoes"><button class="btn cinza peq" onclick="irSecao('fila-topo')">Solicitações</button><button class="btn cinza peq" onclick="irSecao('sec-ch-busca')">Buscar morador</button><button class="btn cinza peq" onclick="irSecao('sec-ch-hist')">Histórico dos acessos</button><button class="btn cinza peq" onclick="irSecao('ch-hist-av-wrap')">Histórico de avisos</button></div>
+<div class="wrap">
     <div id="fila-topo"></div>
     <div class="card">
       <h2 id="c-titulo">Buscar morador</h2>
@@ -379,35 +379,19 @@ body.noturno .aba.ativa{background:#8ED13B!important;color:#0A3D17!important;bor
       <div class="card oculto" id="c-det"></div>
     </div>
     <div class="card">
-      <h2>Histórico dos acessos</h2>
+      <h2 id="sec-ch-hist">Histórico dos acessos</h2>
       <p class="sub">Acessos já finalizados nesta portaria.</p>
       <input id="c-hist-busca" placeholder="Pesquisar: nome, QD, LT, endereço ou serviço..." oninput="renderCentral()" style="margin-bottom:10px">
       <div class="rolagem" id="c-hist"></div>
     </div>
-    <div class="card">
-      <h2>Avisos da portaria</h2>
-      <p class="sub">Avisos de todos os setores nos últimos 3 dias.</p>
-      <div class="rolagem" id="c-avisos-todos"></div>
-    </div>
+    <div id="ch-hist-av-wrap"></div>
   </div>
 </section>
 
 <section id="cadastros" class="tela">
   <div class="wrap">
-    <div class="card">
-      <h2>Histórico de avisos</h2>
-      <p class="sub">Todos os avisos registrados, ativos e finalizados. Use a busca para localizar por morador, QD/LT, endereço, setor, operador ou observação.</p>
-      <div style="position:relative;display:inline-block;margin-bottom:10px">
-        <button class="btn cinza peq" id="cad-filtro-btn" onclick="alternarFiltroCad()">Mostrar: Todos &#9662;</button>
-        <div id="cad-filtro-menu" class="menu-filtro oculto">
-          <div class="opc-filtro" onclick="escolherFiltroCad('ativos')">Somente ativos</div>
-          <div class="opc-filtro" onclick="escolherFiltroCad('finalizados')">Somente finalizados</div>
-          <div class="opc-filtro" onclick="escolherFiltroCad('todos')">Todos</div>
-        </div>
-      </div>
-      <input id="cad-busca" placeholder="Buscar aviso: morador, QD/LT, endereço, setor ou observação..." oninput="renderCadastroAvisos()" style="margin-bottom:10px">
-      <div class="rolagem" id="cad-avisos"></div>
-    </div>
+    <div class="nav-secoes"><button class="btn cinza peq" onclick="irSecao('cad-hist-av-wrap')">Histórico de avisos</button></div>
+    <div id="cad-hist-av-wrap"></div>
   </div>
 </section>
 
@@ -886,6 +870,7 @@ document.addEventListener('keydown', e => {
   if (prox.select && prox.tagName === 'INPUT' && prox.type === 'text') prox.select();
 });
 document.addEventListener('DOMContentLoaded', () => {
+  montarHistAvisos();
   $('p-obs').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('btn-enviar').focus(); }
   });
@@ -1008,7 +993,7 @@ function ajustarCabecalho(){
 window.addEventListener('resize', ajustarCabecalho);
 function renderFila(){
   renderAvisos();
-  if ($('cadastros').classList.contains('ativa')) renderCadastroAvisos();
+  ['cad', 'ph', 'ch'].forEach(p => renderHistAvisos(p));
   processarAvisos();
   const visivel = podeLigar() && portaria && $('central').classList.contains('ativa');
   const topo = $('fila-topo');
@@ -1186,7 +1171,6 @@ function renderHistorico(){
     : '<p class="mini">Nenhum acesso finalizado nesta portaria ainda.</p>';
 }
 function renderPortaria(){
-  renderAvisosTodos('p-avisos-todos');
   renderChips();
   renderListaP();
   renderUltimas();
@@ -1257,7 +1241,6 @@ function abrirCentral(){
   mostrar('central');
 }
 function renderCentral(){
-  renderAvisosTodos('c-avisos-todos');
   const busca = ($('c-hist-busca') ? $('c-hist-busca').value : '').trim();
   const itens = dados.logs
     .filter(l => l['Portaria'] === portaria && l['Status'] !== 'AGUARDANDO LIGAÇÃO' && histFiltra(l, busca))
@@ -1965,27 +1948,49 @@ async function salvarAviso(){
 
 // Gestão de avisos (administrador)
 // Histórico de avisos (tela Cadastros): busca por qualquer parte do aviso
-let cadFiltro = 'todos';
-function alternarFiltroCad(){ $('cad-filtro-menu').classList.toggle('oculto'); }
-function escolherFiltroCad(v){
-  cadFiltro = v;
-  const nomes = { todos: 'Todos', ativos: 'Ativos', finalizados: 'Finalizados' };
-  $('cad-filtro-btn').innerHTML = 'Mostrar: ' + nomes[v] + ' &#9662;';
-  $('cad-filtro-menu').classList.add('oculto');
-  renderCadastroAvisos();
+// Histórico de avisos: mesmo quadro nas telas Cadastros, Visitante e Blindada
+const cadFiltro = { cad: 'todos', ph: 'todos', ch: 'todos' };
+const ROTULOS_FILTRO = { todos: 'Todos', ativos: 'Ativos', finalizados: 'Finalizados' };
+function htmlHistAvisos(pref){
+  return `<div class="card">
+    <h2>Histórico de avisos</h2>
+    <p class="sub">Todos os avisos registrados, ativos e finalizados. Use a busca para localizar por morador, QD/LT, endereço, setor, operador ou observação.</p>
+    <div style="position:relative;display:inline-block;margin-bottom:10px">
+      <button class="btn cinza peq" id="${pref}-filtro-btn" onclick="alternarFiltroCad('${pref}')">Mostrar: Todos &#9662;</button>
+      <div id="${pref}-filtro-menu" class="menu-filtro oculto">
+        <div class="opc-filtro" onclick="escolherFiltroCad('${pref}','ativos')">Somente ativos</div>
+        <div class="opc-filtro" onclick="escolherFiltroCad('${pref}','finalizados')">Somente finalizados</div>
+        <div class="opc-filtro" onclick="escolherFiltroCad('${pref}','todos')">Todos</div>
+      </div>
+    </div>
+    <input id="${pref}-busca" placeholder="Buscar aviso: morador, QD/LT, endereço, setor ou observação..." oninput="renderHistAvisos('${pref}')" style="margin-bottom:10px">
+    <div class="rolagem" id="${pref}-avisos"></div>
+  </div>`;
 }
-function renderCadastroAvisos(){
-  const el = $('cad-avisos');
+function montarHistAvisos(){
+  ['cad', 'ph', 'ch'].forEach(p => { const w = $(p + '-hist-av-wrap'); if (w) w.innerHTML = htmlHistAvisos(p); });
+}
+function alternarFiltroCad(pref){ $(pref + '-filtro-menu').classList.toggle('oculto'); }
+function escolherFiltroCad(pref, v){
+  cadFiltro[pref] = v;
+  $(pref + '-filtro-btn').innerHTML = 'Mostrar: ' + ROTULOS_FILTRO[v] + ' &#9662;';
+  $(pref + '-filtro-menu').classList.add('oculto');
+  renderHistAvisos(pref);
+}
+function renderHistAvisos(pref){
+  const el = $(pref + '-avisos');
   if (!el) return;
-  const t = semAcento($('cad-busca') ? $('cad-busca').value : '').trim().replace(/\s+/g, ' ');
+  const busca = $(pref + '-busca') ? $(pref + '-busca').value : '';
+  const t = semAcento(busca).trim().replace(/\s+/g, ' ');
+  const filtro = cadFiltro[pref] || 'todos';
   const lista = (dados.avisos || []).slice().reverse().filter(a => {
     const fin = ['FINALIZADO', 'EXCLUIDO'].includes(String(a['Status'] || '').toUpperCase());
-    if (cadFiltro === 'ativos' && fin) return false;
-    if (cadFiltro === 'finalizados' && !fin) return false;
+    if (filtro === 'ativos' && fin) return false;
+    if (filtro === 'finalizados' && !fin) return false;
     if (!t) return true;
     const campos = [a['Portaria'], a['Morador Nome'], a['QD'], a['LT'], pq(a['QD']) + ' ' + pq(a['LT']), a['Endereco'],
       a['Setor'], a['Operador'], a['Observacao'], a['Status']].join(' ').toLowerCase();
-    return t.split(' ').every(w => campos.includes(w));
+    return t.split(' ').every(w => semAcento(campos).includes(w));
   });
   el.innerHTML = lista.length
     ? `<table><tr><th>Data</th><th>Portaria</th><th>Setor</th><th>Operador</th><th>Morador</th><th>Observação</th><th>Situação</th></tr>
@@ -1993,6 +1998,11 @@ function renderCadastroAvisos(){
          <td>${esc(curto(a['Morador Nome']))}<br><small class="mini">QD ${esc(pq(a['QD']))} / LT ${esc(pq(a['LT']))}</small></td>
          <td>${esc(a['Observacao'])}</td><td>${['FINALIZADO', 'EXCLUIDO'].includes(String(a['Status']).toUpperCase()) ? '<span class="sit-fin">' + (String(a['Status']).toUpperCase() === 'EXCLUIDO' ? 'Excluído' : 'Finalizado') + '</span>' : '<span class="sit-ativo">Ativo</span>'}</td></tr>`).join('')}</table>`
     : '<p class="mini">Nenhum aviso encontrado.</p>';
+}
+function renderCadastroAvisos(){ renderHistAvisos('cad'); }
+function irSecao(id){
+  const el = $(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 // Lista de todos os avisos da portaria (todos os setores), últimos 3 dias
 function renderAvisosTodos(id){
