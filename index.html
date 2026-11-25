@@ -108,7 +108,7 @@ th{color:var(--dk)}
 .quadrado{width:200px;height:200px;flex-shrink:0;background:#fff;border:2px solid var(--gr);border-left:6px solid var(--lime);border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(10,61,23,.18);cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;transition:transform .15s,box-shadow .2s}
 .quadrado:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(10,61,23,.25)}
 .q-nome{font-weight:800;font-size:.95rem;line-height:1.2}
-@media(min-width:700px){#portaria .wrap,#central .wrap,#cadastros .wrap{margin-left:236px}}
+@media(min-width:700px){#portaria .wrap,#central .wrap{margin-left:236px}}
 html,body{height:100%;margin:0;overflow:hidden}
 #tudo{position:fixed;inset:0;overflow:auto;background:var(--bg)}
 #conteudo{min-width:520px;min-height:100%}
@@ -284,6 +284,7 @@ body.noturno .nav-secoes{background:#07140C}
       <input id="lu" autocomplete="username">
       <label for="ls">Senha</label>
       <input id="ls" type="password" autocomplete="current-password">
+      <div id="login-codigo" class="oculto" style="margin-top:12px"><label for="lc">Código de acesso da portaria</label><input id="lc" autocomplete="off" placeholder="Peça ao administrador"></div>
       <button class="btn bloco" onclick="entrar('blindada')">Entrar como Blindada</button>
       <button class="btn bloco lime" onclick="entrar('visitante')">Entrar como Visitante</button>
       <button class="btn bloco" style="background:#2563EB" onclick="entrar('cadastros')">Entrar como Cadastros</button>
@@ -505,6 +506,16 @@ body.noturno .nav-secoes{background:#07140C}
       </div>
     </div>
     <div id="aba-config" class="oculto">
+      <div class="card">
+        <h2>Acesso pelos computadores da portaria</h2>
+        <p class="sub" id="cod-status"></p>
+        <div class="g2">
+          <div><label for="cod-novo">Novo código de acesso (4 caracteres ou mais)</label><input id="cod-novo" type="password" autocomplete="new-password" placeholder="Digite o novo código"></div>
+          <div style="align-self:end"><button class="btn ok" onclick="salvarCodigoAcesso()">Salvar código</button></div>
+        </div>
+        <p class="sub">O código começa igual à senha do administrador e não aparece na tela. Para trocar, digite o novo código acima. Para retirar o acesso de todos os computadores, use o botão abaixo: cada um precisará digitar o código de novo.</p>
+        <button class="btn cinza" onclick="desligarComputadores()">Desligar todos os computadores</button>
+      </div>
       <div class="card">
         <h2>Integração com Google Planilhas (Apps Script)</h2>
         <div style="margin:10px 0"><button class="btn ok" onclick="baixarCopiaApp()">Baixar cópia do app</button> <button class="btn cinza" onclick="criarMoradoresTeste()">Criar 10 moradores de teste</button></div>
@@ -742,6 +753,9 @@ function iniciarAtualizacaoAuto(){
 }
 
 // ====== LOGIN ======
+// Identificador deste computador (guardado no navegador): depois que o código é aceito, não pede de novo
+function obterDispositivo(){ try { return localStorage.getItem('dispositivo_portaria') || ''; } catch (e) { return ''; } }
+function salvarDispositivo(tk){ try { localStorage.setItem('dispositivo_portaria', tk); } catch (e) {} }
 async function entrar(m){
   prepararSom();
   const usuario = $('lu').value.trim(), senha = $('ls').value;
@@ -749,13 +763,16 @@ async function entrar(m){
   const botoes = document.querySelectorAll('#login .btn');
   botoes.forEach(b => b.disabled = true);
   try {
-    const j = await api({ action: 'login', usuario, senha });
+    const disp = obterDispositivo();
+    const j = await api({ action: 'login', usuario, senha, dispositivo: disp, codigo: $('lc').value.trim() });
+    if (j.precisaCodigo) { $('login-codigo').classList.remove('oculto'); toast(j.message || 'Este computador precisa do código da portaria.'); return; }
     if (j.status !== 'success') { toast(j.message || 'Usuário ou senha inválidos.'); return; }
+    if (j.token) salvarDispositivo(j.token);
     if (!(j.user.perfil === 'admin' || j.user.perfil === 'operador')) {
       toast('Este login não tem acesso a esta área.');
       return;
     }
-    me = j.user; cred = { usuario, senha }; modo = m;
+    me = j.user; cred = { usuario, senha, dispositivo: j.token || disp }; modo = m;
     avisados = null; visto = {}; piscar.clear();
     $('ls').value = '';
     await carregarDados();
@@ -898,6 +915,33 @@ function trocarAbaTela(secao, i){
   todos.forEach(el => el.classList.toggle('oculto', !ativos.has(el)));
   sec.querySelectorAll('.nav-secoes button').forEach((b, k) => b.classList.toggle('ativo', k === i));
   sec.dataset.aba = i;
+}
+// ===== Código de acesso dos computadores (administrador) =====
+function mostrarStatusCodigo(){
+  const el = $('cod-status');
+  if (!el) return;
+  el.textContent = 'Código em uso (oculto). Os computadores precisam dele para entrar.';
+}
+async function salvarCodigoAcesso(){
+  try {
+    const novo = $('cod-novo').value.trim();
+    if (!novo) { toast('Digite o novo código.'); return; }
+    const j = await api({ action: 'salvarCodigoPortaria', valor: novo });
+    if (j.status !== 'success') throw new Error(j.message);
+    toast(j.message);
+    $('cod-novo').value = '';
+    await carregarDados(false);
+    mostrarStatusCodigo();
+  } catch (e) { toast('Não consegui salvar: ' + e.message); }
+}
+async function desligarComputadores(){
+  const ok = await confirmarBonito('Desligar todos os computadores?', 'Cada computador precisará digitar o código de acesso de novo para entrar.', 'Sim, desligar');
+  if (!ok) return;
+  try {
+    const j = await api({ action: 'revogarDispositivos' });
+    if (j.status !== 'success') throw new Error(j.message);
+    toast(j.message);
+  } catch (e) { toast('Não consegui desligar: ' + e.message); }
 }
 // Enter passa para o próximo campo do formulário (campos de busca com lista continuam como estavam)
 document.addEventListener('keydown', e => {
@@ -1559,7 +1603,7 @@ function trocarAba(a){
   });
   if (a === 'moradores') { fecharFormMorador(); renderMoradores(); }
   if (a === 'operadores') { fecharFormUsuario(); renderOperadores(); }
-  if (a === 'config') $('cfg-url').value = SCRIPT_URL;
+  if (a === 'config') { $('cfg-url').value = SCRIPT_URL; mostrarStatusCodigo(); }
   if (a === 'registros') renderRegistros();
   if (a === 'avisos') renderAvisosAdmin();
   if (a === 'cpf') $('cpf-resultado').textContent = '';
@@ -1828,16 +1872,27 @@ function dataDia(s){
 }
 // Aviso vigente: permanente (até ser excluído), ou entre o dia de liberação e o de finalização,
 // ou os avisos comuns dos últimos 3 dias
-function avisoAtivo(a){
+// Aviso vigente: permanente (até ser excluído); com dia de finalização, até esse dia;
+// sem dia de finalização, vale 24 horas (a partir do registro ou do dia de liberação)
+const DIA_MS = 24 * 3600 * 1000;
+function avisoPrazo(a){
+  if (String(a['Permanente'] || '').toUpperCase() === 'SIM') return null;
+  if (a['Fim']) { const f = dataDia(a['Fim']); return f ? f + DIA_MS - 1 : null; }
+  const base = a['Inicio'] ? dataDia(a['Inicio']) : (dataDe(a['Data/Hora']) ? dataDe(a['Data/Hora']).getTime() : 0);
+  return base ? base + DIA_MS : null;
+}
+function avisoFinalizado(a){
   const st = String(a['Status'] || '').toUpperCase();
-  if (st === 'FINALIZADO' || st === 'EXCLUIDO') return false;
+  if (st === 'FINALIZADO' || st === 'EXCLUIDO') return true;
+  const prazo = avisoPrazo(a);
+  return prazo !== null && Date.now() > prazo;
+}
+function avisoAtivo(a){
+  if (avisoFinalizado(a)) return false;
   if (String(a['Permanente'] || '').toUpperCase() === 'SIM') return true;
-  const hoje = new Date();
-  const h0 = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
-  const ini = dataDia(a['Inicio']), fim = dataDia(a['Fim']);
-  if (fim) return h0 <= fim && (!ini || h0 >= ini);
-  const d = dataDe(a['Data/Hora']);
-  return !!d && d.getTime() >= Date.now() - 3 * 24 * 3600 * 1000;
+  const ini = a['Inicio'] ? dataDia(a['Inicio']) : 0;
+  if (ini && Date.now() < ini) return false;
+  return avisoPrazo(a) !== null;
 }
 function avisosRecentes(){
   const ms = a => { const d = dataDe(a['Data/Hora']); return d ? d.getTime() : 0; };
@@ -1847,7 +1902,7 @@ function avisosRecentes(){
 }
 function renderAvisos(){
   ajustarCabecalho();
-  const visivel = !!me && ['portaria', 'central', 'cadastros'].some(id => $(id).classList.contains('ativa'));
+  const visivel = !!me && ['portaria', 'central'].some(id => $(id).classList.contains('ativa'));
   $('avisos').classList.toggle('oculto', !visivel);
   if (!visivel) return;
   const naCentral = $('central').classList.contains('ativa');
@@ -2010,6 +2065,7 @@ function htmlHistAvisos(pref){
         <div class="opc-filtro" onclick="escolherFiltroCad('${pref}','finalizados')">Somente finalizados</div>
         <div class="opc-filtro" onclick="escolherFiltroCad('${pref}','todos')">Todos</div>
       </div>
+      ${pref === 'cad' ? '<button class="btn ok peq" onclick="abrirNovoAviso()" style="margin:0 0 10px 8px">+ Novo aviso</button>' : ''}
     </div>
     <input id="${pref}-busca" placeholder="Buscar aviso: morador, QD/LT, endereço, setor ou observação..." oninput="renderHistAvisos('${pref}')" style="margin-bottom:10px">
     <div class="rolagem" id="${pref}-avisos"></div>
@@ -2032,7 +2088,7 @@ function renderHistAvisos(pref){
   const t = semAcento(busca).trim().replace(/\s+/g, ' ');
   const filtro = cadFiltro[pref] || 'todos';
   const lista = (dados.avisos || []).slice().reverse().filter(a => {
-    const fin = ['FINALIZADO', 'EXCLUIDO'].includes(String(a['Status'] || '').toUpperCase());
+    const fin = avisoFinalizado(a);
     if (filtro === 'ativos' && fin) return false;
     if (filtro === 'finalizados' && !fin) return false;
     if (!t) return true;
@@ -2044,7 +2100,7 @@ function renderHistAvisos(pref){
     ? `<table><tr><th>Data</th><th>Portaria</th><th>Setor</th><th>Operador</th><th>Morador</th><th>Observação</th><th>Situação</th></tr>
        ${lista.map(a => `<tr><td>${esc(a['Data/Hora'])}</td><td>${esc(a['Portaria'])}</td><td>${esc(a['Setor'])}</td><td>${esc(a['Operador'])}</td>
          <td>${esc(curto(a['Morador Nome']))}<br><small class="mini">QD ${esc(pq(a['QD']))} / LT ${esc(pq(a['LT']))}</small></td>
-         <td>${esc(a['Observacao'])}</td><td>${['FINALIZADO', 'EXCLUIDO'].includes(String(a['Status']).toUpperCase()) ? '<span class="sit-fin">' + (String(a['Status']).toUpperCase() === 'EXCLUIDO' ? 'Excluído' : 'Finalizado') + '</span>' : '<span class="sit-ativo">Ativo</span>'}</td></tr>`).join('')}</table>`
+         <td>${esc(a['Observacao'])}</td><td>${avisoFinalizado(a) ? '<span class="sit-fin">' + (String(a['Status']).toUpperCase() === 'EXCLUIDO' ? 'Excluído' : 'Finalizado') + '</span>' : '<span class="sit-ativo">Ativo</span>'}</td></tr>`).join('')}</table>`
     : '<p class="mini">Nenhum aviso encontrado.</p>';
 }
 function renderCadastroAvisos(){ renderHistAvisos('cad'); }
