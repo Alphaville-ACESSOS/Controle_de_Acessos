@@ -237,6 +237,9 @@ body.noturno #c-det .caixa label{color:#FFFFFF!important}
 .potinho{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}
 .potinho.mais{background:#0A3D17;color:#fff}
 .topo-det{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+
+.cb-linha{display:flex;align-items:center;gap:8px;margin:8px 0}
+.cb-linha input[type=checkbox]{width:auto;margin:0;flex:0 0 auto;height:auto}
 </style>
 </head>
 <body>
@@ -391,6 +394,7 @@ body.noturno #c-det .caixa label{color:#FFFFFF!important}
       <button class="aba" id="tab-config" onclick="trocarAba('config')">3. Configuração Google Planilhas</button>
       <button class="aba" id="tab-registros" onclick="trocarAba('registros')">4. Histórico Geral</button>
       <button class="aba" id="tab-avisos" onclick="trocarAba('avisos')">5. Avisos</button>
+      <button class="aba" id="tab-cpf" onclick="trocarAba('cpf')">6. Gerador de CPF</button>
     </div>
 
     <div id="aba-moradores" class="oculto">
@@ -480,6 +484,17 @@ body.noturno #c-det .caixa label{color:#FFFFFF!important}
       </div>
     </div>
 
+    <div id="aba-cpf" class="oculto">
+      <div class="card">
+        <h2>Gerador de CPF</h2>
+        <p class="sub">Gera CPFs válidos para testes ou cadastros. Cada clique cria um número novo. Nada é salvo.</p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn ok" onclick="gerarCpf()">Gerar CPF</button>
+          <span id="cpf-resultado" style="font-size:1.4rem;font-weight:800;letter-spacing:1px"></span>
+          <button class="btn cinza peq" id="cpf-copiar" onclick="copiarCpf()" style="display:none">Copiar</button>
+        </div>
+      </div>
+    </div>
     <div id="aba-config" class="oculto">
       <div class="card">
         <h2>Integração com Google Planilhas (Apps Script)</h2>
@@ -793,6 +808,58 @@ function ligarTeclado(campoId, listaId){
     }
   });
 }
+
+
+// ===== Gerador de CPF (administradores) =====
+const cpfGerados = new Set();
+// Calcula os dígitos verificadores pelo método oficial do CPF
+function cpfComDigitos(base9){
+  const dv = (n) => {
+    let soma = 0;
+    for (let i = 0; i < n.length; i++) soma += Number(n[i]) * (n.length + 1 - i);
+    const r = (soma * 10) % 11;
+    return r === 10 ? 0 : r;
+  };
+  const d1 = dv(base9);
+  const d2 = dv(base9 + d1);
+  return base9 + d1 + d2;
+}
+function gerarCpf(){
+  let cpf;
+  do {
+    let base = '';
+    for (let i = 0; i < 9; i++) base += Math.floor(Math.random() * 10);
+    if (/^(\d)\1{8}$/.test(base)) continue;
+    cpf = cpfComDigitos(base);
+  } while (!cpf || cpfGerados.has(cpf) || /^(\d)\1{10}$/.test(cpf));
+  cpfGerados.add(cpf);
+  const f = cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+  $('cpf-resultado').textContent = f;
+  $('cpf-copiar').style.display = '';
+}
+function copiarCpf(){
+  const txt = $('cpf-resultado').textContent;
+  if (!txt) return;
+  try { navigator.clipboard.writeText(txt); toast('CPF copiado.'); }
+  catch (e) { toast('Não consegui copiar. Selecione o número e copie.'); }
+}
+// Enter passa para o próximo campo do formulário (campos de busca com lista continuam como estavam)
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.isComposing || e.defaultPrevented) return;
+  const t = e.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (['checkbox', 'radio', 'button', 'submit', 'password', 'file', 'range', 'color'].includes(t.type)) return;
+  if (t.dataset.teclado) return;
+  const campos = Array.from(document.querySelectorAll('input, select, textarea'))
+    .filter(el => !el.disabled && el.type !== 'hidden' && el.offsetParent !== null);
+  const i = campos.indexOf(t);
+  if (i < 0) return;
+  const prox = campos.slice(i + 1).find(el => el.tagName !== 'BUTTON');
+  if (!prox) return;
+  e.preventDefault();
+  prox.focus();
+  if (prox.select && prox.tagName === 'INPUT' && prox.type === 'text') prox.select();
+});
 document.addEventListener('DOMContentLoaded', () => {
   ligarTeclado('c-busca', 'c-res');
   ligarTeclado('p-busca', 'p-lista');
@@ -981,8 +1048,10 @@ function escolherAssunto(v){
 // "15"    = todos os lotes da quadra 15
 // endereço igual ao cadastrado = só essa opção
 // nome ou endereço parcial = quem tiver todas as palavras digitadas
+// Remove acentos para comparar nomes (JOÃO = joao)
+const semAcento = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 function buscarMoradores(termo, lista){
-  const t = String(termo || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const t = semAcento(termo).trim().replace(/\s+/g, ' ');
   if (!t) return [];
   const pad = s => String(s || '').trim().padStart(2, '0');
   const par = t.match(/^(\d{1,2})\s*[\/\-.\s]\s*(\d{1,2})$/);
@@ -998,7 +1067,7 @@ function buscarMoradores(termo, lista){
   if (exato.length) return exato;
   const palavras = t.split(' ');
   return lista.filter(r => {
-    const campos = (nomesDe(r) + ' ' + (r['Endereco'] || '')).toLowerCase().split(/\s+/);
+    const campos = semAcento(nomesDe(r) + ' ' + (r['Endereco'] || '')).split(/\s+/);
     return palavras.every(w => campos.some(c => c.startsWith(w)));
   });
 }
@@ -1055,7 +1124,7 @@ function selPortaria(id){
 }
 // Pesquisa do histórico: cada palavra digitada deve aparecer no nome, QD/LT, endereço ou serviço
 function histFiltra(l, termo){
-  const t = String(termo || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const t = semAcento(termo).trim().replace(/\s+/g, ' ');
   if (!t) return true;
   const campos = [l['Morador Nome'], l['Visitante/Prestador'], l['Assunto'], l['Endereco'], l['Operador'],
     pq(l['QD']) + ' ' + pq(l['LT']), 'qd ' + pq(l['QD']) + ' lt ' + pq(l['LT'])].join(' ').toLowerCase();
@@ -1416,7 +1485,7 @@ function abrirAdmin(){
 }
 function trocarAba(a){
   abaAtual = a;
-  ['moradores', 'operadores', 'registros', 'avisos', 'config'].forEach(x => {
+  ['moradores', 'operadores', 'registros', 'avisos', 'cpf', 'config'].forEach(x => {
     $('aba-' + x).classList.toggle('oculto', x !== a);
     $('tab-' + x).classList.toggle('ativa', x === a);
   });
@@ -1425,6 +1494,7 @@ function trocarAba(a){
   if (a === 'config') $('cfg-url').value = SCRIPT_URL;
   if (a === 'registros') renderRegistros();
   if (a === 'avisos') renderAvisosAdmin();
+  if (a === 'cpf') $('cpf-resultado').textContent = '';
 }
 function addTit(nome = '', tel = ''){
   const d = document.createElement('div');
@@ -1857,7 +1927,7 @@ async function salvarAviso(){
 function renderCadastroAvisos(){
   const el = $('cad-avisos');
   if (!el) return;
-  const t = ($('cad-busca') ? $('cad-busca').value : '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const t = semAcento($('cad-busca') ? $('cad-busca').value : '').trim().replace(/\s+/g, ' ');
   const lista = (dados.avisos || []).slice().reverse().filter(a => {
     if (!t) return true;
     const campos = [a['Portaria'], a['Morador Nome'], a['QD'], a['LT'], pq(a['QD']) + ' ' + pq(a['LT']), a['Endereco'],
