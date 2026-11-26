@@ -287,7 +287,7 @@ body.noturno .nav-secoes .pill-nav:not(.ativo){background:#1E4A2C;color:#FFFFFF;
       <input id="lu" autocomplete="username">
       <label for="ls">Senha</label>
       <input id="ls" type="password" autocomplete="current-password">
-      <div id="login-codigo" class="oculto" style="margin-top:12px"><label for="lc">Código de acesso da portaria</label><input id="lc" autocomplete="off" placeholder="Peça ao administrador"></div>
+      <div id="login-codigo" class="oculto" style="margin-top:12px"><label for="lc">Código de acesso da portaria</label><input id="lc" type="password" autocomplete="off" placeholder="Peça ao administrador"></div>
       <button class="btn bloco" onclick="entrar('blindada')">Entrar como Blindada</button>
       <button class="btn bloco lime" onclick="entrar('visitante')">Entrar como Visitante</button>
       <button class="btn bloco" style="background:#2563EB" onclick="entrar('cadastros')">Entrar como Cadastros</button>
@@ -771,6 +771,8 @@ async function entrar(m){
     if (j.precisaCodigo) { $('login-codigo').classList.remove('oculto'); toast(j.message || 'Este computador precisa do código da portaria.'); return; }
     if (j.status !== 'success') { toast(j.message || 'Usuário ou senha inválidos.'); return; }
     if (j.token) salvarDispositivo(j.token);
+    $('login-codigo').classList.add('oculto');
+    $('lc').value = '';
     if (!(j.user.perfil === 'admin' || j.user.perfil === 'operador')) {
       toast('Este login não tem acesso a esta área.');
       return;
@@ -796,6 +798,9 @@ function sair(){
   me = null; cred = null; portaria = null;
   clearInterval(timer);
   $('lu').value = '';
+  $('ls').value = '';
+  $('lc').value = '';
+  $('login-codigo').classList.add('oculto');
   fecharDet();
   mostrar('login');
 }
