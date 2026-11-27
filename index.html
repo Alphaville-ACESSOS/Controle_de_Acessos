@@ -398,6 +398,7 @@ body.noturno #av-ver .caixa-ver{background:#10261A;color:#FFFFFF}
       <div class="rolagem" id="c-hist"></div>
     </div>
     <div id="ch-hist-av-wrap"></div>
+    <div id="ch-veic-wrap"></div>
   </div>
 </section>
 
@@ -697,6 +698,15 @@ function toast(msg){
 let pendentesApi = 0;
 let filaApi = Promise.resolve();
 // Todas as chamadas à planilha passam por uma fila: uma de cada vez, com nova tentativa se a conexão falhar
+// Ações que alteram a planilha: se a conexão cair, ficam guardadas no navegador até voltar
+const ACOES_OFFLINE = ['createAccessRequest', 'criarRegistroBlindada', 'updateAccessStatus', 'criarAviso', 'finalizarAviso', 'excluirAviso', 'saveResident', 'saveUser', 'salvarConfigAvisos'];
+function lerFilaLocal(){ try { return JSON.parse(localStorage.getItem('fila_offline_portaria') || '[]'); } catch (e) { return []; } }
+function gravarFilaLocal(f){ try { localStorage.setItem('fila_offline_portaria', JSON.stringify(f)); } catch (e) {} atualizarIndicadorFila(); }
+function atualizarIndicadorFila(){
+  const n = lerFilaLocal().length;
+  const b = $('btn-atualizar');
+  if (b) b.title = n ? n + ' ação(ões) aguardando conexão' : 'Atualizar';
+}
 function api(corpo){
   pendentesApi++;
   const p = filaApi.then(() => apiDireta(corpo).catch(e => {
@@ -704,8 +714,44 @@ function api(corpo){
     throw e;
   }));
   filaApi = p.catch(() => {});
-  return p.finally(() => { pendentesApi--; });
+  return p.catch(e => {
+    if (ACOES_OFFLINE.includes(corpo.action) && /Google|demorou/.test(e.message)) {
+      const fila = lerFilaLocal();
+      fila.push({ corpo: corpo, t: Date.now() });
+      gravarFilaLocal(fila);
+      toast('Sem conexão agora: a ação ficou guardada e será enviada quando a conexão voltar.');
+      return { status: 'success', pendente: true, message: 'Guardado para envio.' };
+    }
+    throw e;
+  }).finally(() => { pendentesApi--; });
 }
+// Envia, em ordem, as ações guardadas. Para quando a conexão ainda não voltou.
+let enviandoFila = false;
+async function enviarFilaPendente(){
+  if (enviandoFila) return;
+  if (!lerFilaLocal().length || !me) return;
+  enviandoFila = true;
+  try {
+    let fila = lerFilaLocal();
+    while (fila.length) {
+      const op = filaApi.then(() => apiDireta(fila[0].corpo));
+      filaApi = op.catch(() => {});
+      await op;
+      fila = lerFilaLocal();
+      fila.shift();
+      gravarFilaLocal(fila);
+    }
+    toast('Ações pendentes enviadas.');
+    await carregarDados(false);
+    renderTela();
+  } catch (e) {
+    // ainda sem conexão: tenta de novo na próxima atualização
+  } finally {
+    enviandoFila = false;
+    atualizarIndicadorFila();
+  }
+}
+window.addEventListener('online', () => enviarFilaPendente());
 function apiDireta(corpo){
   return new Promise((resolve, reject) => {
     if (cred) corpo = Object.assign({}, corpo, { auth: cred });
@@ -736,11 +782,12 @@ async function carregarDados(mostrar = true){
 }
 async function atualizarTudo(manual){
   if (!me) return;
+  enviarFilaPendente();
   if (!manual && pendentesApi > 0) return;
   const btn = $('btn-atualizar'), txt = $('txt-atu');
   if (manual) { btn.classList.add('girando'); txt.textContent = 'Atualizando...'; }
   try {
-    await carregarDados(!!manual);
+    await carregarDados(false);
     renderTela();
     if (manual) {
       txt.textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -913,7 +960,8 @@ const ABAS_TELA = {
     { rotulo: 'Solicitações', itens: () => [$('fila-topo'), $('c-area')] },
     { rotulo: 'Buscar morador', itens: () => [cartaoDe('c-busca'), $('c-area')] },
     { rotulo: 'Histórico dos acessos', itens: () => [cartaoDe('c-hist')] },
-    { rotulo: 'Histórico de avisos', itens: () => [$('ch-hist-av-wrap')] }
+    { rotulo: 'Histórico de avisos', itens: () => [$('ch-hist-av-wrap')] },
+    { rotulo: 'Veículos blindados', itens: () => [$('ch-veic-wrap')] }
   ],
   cadastros: [
     { rotulo: 'Histórico de avisos', itens: () => [$('cad-hist-av-wrap')] }
@@ -1367,7 +1415,23 @@ function abrirCentral(){
   renderCentral();
   mostrar('central');
 }
+// Veículos blindados (somente visualização): lista de todas as portarias, vinda da aba AG_Blindados
+function renderVeiculosCentral(){
+  const el = $('ch-veic-wrap');
+  if (!el) return;
+  const lista = dados.veiculos || [];
+  const portarias = ['Iguaçu', 'Parati', 'Andorinhas', 'Araucárias'];
+  el.innerHTML = `<div class="card"><h2>Veículos blindados</h2><p class="sub">Somente visualização. Atualiza sozinho quando a planilha AG_Blindados for alterada.</p>` +
+    portarias.map(p => {
+      const itens = lista.filter(v => v.Portaria === p);
+      if (!itens.length) return '';
+      return `<h3 style="margin:14px 0 6px">${p}</h3><div class="rolagem"><table><tr><th>QD/LT</th><th>Rua</th><th>Morador</th><th>Marca</th><th>Modelo</th><th>Cor</th><th>Placa</th></tr>` +
+        itens.map(v => `<tr><td>${esc(v['QD/LT'])}</td><td>${esc(v.Endereco)}</td><td>${esc(v.Morador)}</td><td>${esc(v.Marca)}</td><td>${esc(v.Modelo)}</td><td>${esc(v.Cor)}</td><td>${esc(v.Placa)}</td></tr>`).join('') +
+        `</table></div>`;
+    }).join('') + `</div>`;
+}
 function renderCentral(){
+  renderVeiculosCentral();
   const busca = ($('c-hist-busca') ? $('c-hist-busca').value : '').trim();
   const itens = dados.logs
     .filter(l => l['Portaria'] === portaria && l['Status'] !== 'AGUARDANDO LIGAÇÃO' && histFiltra(l, busca))
@@ -1496,6 +1560,16 @@ function renderDet(){
       </div>
     </div>`;
 }
+// Sr. ou Sra. pelo primeiro nome (nomes femininos comuns terminam em A ou estão na lista abaixo)
+const NOMES_MASC_EM_A = ['LUCA', 'NICOLA', 'ELIAS', 'JONAS', 'JOSUA', 'JOSHUA', 'ISAIAS', 'ZACARIAS', 'MATIAS', 'TOBIAS', 'JOAQUIM', 'SERGIO', 'ANTONIO'];
+const NOMES_FEM_OUTROS = ['ALICE', 'BEATRIZ', 'ISABEL', 'RAQUEL', 'MABEL', 'NOEMI', 'LIZ', 'RUTH', 'YARA', 'ESTER', 'ESTHER', 'DEBORA', 'DIANE', 'SIMONE', 'ROSE', 'MARLENE', 'BEATRICE', 'ANNE', 'IRENE', 'IRIS', 'CLARICE', 'ELIZE', 'DANIELE', 'RAFAELE', 'GIOVANNE'];
+function tratamento(nomeCompleto){
+  const primeiro = semAcento(String(nomeCompleto || '').trim().split(/\s+/)[0] || '').toUpperCase();
+  if (!primeiro) return 'Sr.';
+  if (NOMES_MASC_EM_A.includes(primeiro)) return 'Sr.';
+  if (primeiro.endsWith('A') || NOMES_FEM_OUTROS.includes(primeiro)) return 'Sra.';
+  return 'Sr.';
+}
 function saudacao(){
   const agora = new Date();
   const min = agora.getHours() * 60 + agora.getMinutes();
@@ -1511,7 +1585,7 @@ function textoMensagem(nomeTitular){
   const linhas = [
     '🏠 *Associação Alphaville Graciosa Residencial*',
     '',
-    emoji + ' ' + saud + ', *Olá, ' + (nomeTitular || 'morador') + '!*',
+    emoji + ' ' + saud + ', *' + tratamento(nomeTitular) + ' ' + (nomeTitular || 'morador') + '!*',
     '',
     '🚪 Aqui é a portaria *' + portaria + '*.',
     visitante
