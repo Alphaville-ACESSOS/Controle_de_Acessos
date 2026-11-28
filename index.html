@@ -1347,14 +1347,14 @@ function obsMorador(e, i){
   e.preventDefault();
   const el = e.target;
   const txt = el.value.trim();
-  if (!txt) return;
   const m = pMores[i];
-  if (!m) return;
-  const linha = qdPadrao(m) + ' - ' + txt;
-  const ta = $('p-obs');
-  ta.value = ta.value.trim() ? ta.value.trimEnd() + '\n' + linha : linha;
+  if (txt && m) {
+    const linha = qdPadrao(m) + ' - ' + txt;
+    const ta = $('p-obs');
+    ta.value = ta.value.trim() ? ta.value.trimEnd() + '\n' + linha : linha;
+  }
   el.value = '';
-  el.focus();
+  $('p-busca').focus();
 }
 // Observações que valem para cada morador: as linhas dele e as gerais (sem QD/LT na frente)
 function obsDoMorador(m){
@@ -1382,8 +1382,11 @@ function selPortaria(id){
   const r = dados.residents.find(x => String(x.ID) === String(id));
   if (r && !pMores.some(m => String(m.ID) === String(id))) pMores.push(r);
   $('p-busca').value = '';
-  $('p-busca').focus();
   renderListaP();
+  // o cursor vai para a observação do morador que acabou de ser escolhido
+  const campos = document.querySelectorAll('.obs-morador');
+  const ultimo = campos[pMores.length - 1];
+  if (ultimo) ultimo.focus(); else $('p-busca').focus();
 }
 // Pesquisa do histórico: cada palavra digitada deve aparecer no nome, QD/LT, endereço ou serviço
 function histFiltra(l, termo){
