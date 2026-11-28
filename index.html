@@ -272,6 +272,20 @@ body.noturno .nav-secoes .pill-nav:not(.ativo){background:#1E4A2C;color:#FFFFFF;
 #av-ver.oculto{display:none}
 #av-ver .caixa-ver{background:#FFFFFF;color:#0A3D17;border-radius:14px;padding:20px;max-width:520px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.35)}
 body.noturno #av-ver .caixa-ver{background:#10261A;color:#FFFFFF}
+.av-grande{height:auto;overflow:visible}
+.av-grande .av-obs-total{display:block;-webkit-line-clamp:unset;white-space:pre-wrap;overflow:visible}
+table.hist-av{table-layout:fixed;width:100%}
+table.hist-av th,table.hist-av td{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;vertical-align:middle}
+table.hist-av tr{height:52px}
+table.hist-av tr[onclick]{cursor:pointer}
+table.hist-av tr[onclick]:hover{background:rgba(142,209,59,.14)}
+table.hist-av th:nth-child(1),table.hist-av td:nth-child(1){width:15%}
+table.hist-av th:nth-child(2),table.hist-av td:nth-child(2){width:9%}
+table.hist-av th:nth-child(3),table.hist-av td:nth-child(3){width:10%}
+table.hist-av th:nth-child(4),table.hist-av td:nth-child(4){width:12%}
+table.hist-av th:nth-child(5),table.hist-av td:nth-child(5){width:20%}
+table.hist-av th:nth-child(6),table.hist-av td:nth-child(6){width:26%}
+table.hist-av th:nth-child(7),table.hist-av td:nth-child(7){width:8%}
 </style>
 </head>
 <body>
@@ -369,6 +383,7 @@ body.noturno #av-ver .caixa-ver{background:#10261A;color:#FFFFFF}
     <div class="card">
       <h2 id="sec-ph-hist">Histórico dos últimos acessos</h2>
       <p class="sub">Acessos já finalizados pela Central Blindada nesta portaria.</p>
+      <div style="margin-bottom:8px"><label for="p-periodo" style="margin-right:8px">Período:</label><select id="p-periodo" onchange="mudarPeriodo(this.value)"><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="180">Últimos 6 meses</option><option value="365">Último ano</option></select></div>
       <input id="p-hist-busca" placeholder="Pesquisar: nome, QD, LT, endereço ou serviço..." oninput="renderHistorico()" style="margin-bottom:10px">
       <div class="rolagem" id="p-hist"></div>
     </div>
@@ -394,6 +409,7 @@ body.noturno #av-ver .caixa-ver{background:#10261A;color:#FFFFFF}
     <div class="card">
       <h2 id="sec-ch-hist">Histórico dos acessos</h2>
       <p class="sub">Acessos já finalizados nesta portaria.</p>
+      <div style="margin-bottom:8px"><label for="c-periodo" style="margin-right:8px">Período:</label><select id="c-periodo" onchange="mudarPeriodo(this.value)"><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="180">Últimos 6 meses</option><option value="365">Último ano</option></select></div>
       <input id="c-hist-busca" placeholder="Pesquisar: nome, QD, LT, endereço ou serviço..." oninput="renderCentral()" style="margin-bottom:10px">
       <div class="rolagem" id="c-hist"></div>
     </div>
@@ -696,6 +712,35 @@ function toast(msg){
 
 // ====== COMUNICAÇÃO COM A PLANILHA ======
 let pendentesApi = 0;
+// Registros de períodos maiores que 30 dias (lidos da planilha de arquivo)
+let extraLogs = [], extraAvisos = [], periodoDias = 30;
+function mesclarExtras(){
+  const vl = new Set(dados.logs.map(l => l['Protocolo']));
+  extraLogs.forEach(l => { if (!vl.has(l['Protocolo'])) { dados.logs.push(l); vl.add(l['Protocolo']); } });
+  const va = new Set(dados.avisos.map(a => a['Protocolo']));
+  extraAvisos.forEach(a => { if (!va.has(a['Protocolo'])) { dados.avisos.push(a); va.add(a['Protocolo']); } });
+}
+// Muda o período dos históricos. Acima de 30 dias, mostra a mensagem de carregamento enquanto lê o arquivo.
+async function mudarPeriodo(dias){
+  dias = Number(dias) || 30;
+  periodoDias = dias;
+  document.querySelectorAll('select[id$="-periodo"]').forEach(s => { s.value = String(dias); });
+  if (dias <= 30) { extraLogs = []; extraAvisos = []; renderTela(); return; }
+  mostrarCarregando(true, 'Carregando informações...');
+  try {
+    const j = await api({ action: 'buscarHistorico', dias: dias });
+    if (j.status !== 'success') throw new Error(j.message);
+    extraLogs = j.logs || [];
+    extraAvisos = j.avisos || [];
+    if (!j.arquivoDisponivel) toast('Planilha de arquivo ainda não configurada. Mostrando só os últimos 30 dias.');
+    await carregarDados(false);
+    renderTela();
+  } catch (e) {
+    toast('Não consegui carregar o período: ' + e.message);
+  } finally {
+    mostrarCarregando(false);
+  }
+}
 let filaApi = Promise.resolve();
 // Todas as chamadas à planilha passam por uma fila: uma de cada vez, com nova tentativa se a conexão falhar
 // Ações que alteram a planilha: se a conexão cair, ficam guardadas no navegador até voltar
@@ -766,9 +811,11 @@ function apiDireta(corpo){
     document.body.appendChild(s);
   });
 }
-function mostrarCarregando(on){
+function mostrarCarregando(on, texto){
   const el = document.getElementById('carregando');
-  if (el) el.classList.toggle('oculto', !on);
+  if (!el) return;
+  if (texto) el.querySelector('.caixa').innerHTML = '<div class="giro"></div>' + texto;
+  el.classList.toggle('oculto', !on);
 }
 async function carregarDados(mostrar = true){
   if (mostrar) mostrarCarregando(true);
@@ -776,6 +823,7 @@ async function carregarDados(mostrar = true){
     const j = await api({ action: 'getInitialData' });
     if (j.status !== 'success') throw new Error(j.message);
     dados = { residents: j.residents || [], logs: j.logs || [], users: j.users || [], avisos: j.avisos || [], veiculos: j.veiculos || [], config: j.config || {} };
+    mesclarExtras();
   } finally {
     if (mostrar) mostrarCarregando(false);
   }
@@ -2047,15 +2095,19 @@ function avisosRecentes(){
     .slice().sort((a, b) => ms(b) - ms(a));
 }
 // Versão completa do aviso (ao clicar no aviso da lateral)
+// Aviso completo: mesma aparência do cartão da lateral, sem limite de texto
 function verAviso(prot){
   const a = (dados.avisos || []).find(x => String(x['Protocolo']) === String(prot));
   if (!a) return;
   $('av-ver-corpo').innerHTML = `
-    <div class="mini">${esc(a['Setor'])} · ${esc(a['Operador'])} · ${esc(a['Data/Hora'])}</div>
-    <h2 style="margin:8px 0">${esc(a['Morador Nome'])}</h2>
-    <p><strong>QD ${esc(pq(a['QD']))} • LT ${esc(pq(a['LT']))}</strong></p>
-    <p style="white-space:pre-wrap;font-size:1.05rem;margin:12px 0">${esc(a['Observacao'])}</p>
-    <button class="btn cinza" onclick="fecharVerAviso()">Fechar</button>`;
+    <div class="av-card av-grande">
+      <div class="av-setor">${esc(a['Setor'])} · ${esc(a['Operador'])}</div>
+      <div class="resp-nome">${esc(a['Morador Nome'])}</div>
+      <div class="mini">QD ${esc(pq(a['QD']))} • LT ${esc(pq(a['LT']))}</div>
+      <div class="av-obs av-obs-total">${esc(a['Observacao'])}</div>
+      <div class="mini">${esc(a['Data/Hora'])}</div>
+    </div>
+    <div style="text-align:right;margin-top:14px"><button class="btn cinza" onclick="fecharVerAviso()">Fechar</button></div>`;
   $('av-ver').classList.remove('oculto');
 }
 function fecharVerAviso(){ $('av-ver').classList.add('oculto'); }
@@ -2233,6 +2285,7 @@ function htmlHistAvisos(pref){
       </div>
       ${pref === 'cad' ? '<button class="btn ok peq" onclick="abrirNovoAviso()" style="margin:0 0 10px 8px">+ Novo aviso</button>' : ''}
     </div>
+    <div style="margin-bottom:8px"><label for="${pref}-periodo" style="margin-right:8px">Período:</label><select id="${pref}-periodo" onchange="mudarPeriodo(this.value)"><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="180">Últimos 6 meses</option><option value="365">Último ano</option></select></div>
     <input id="${pref}-busca" placeholder="Buscar aviso: morador, QD/LT, endereço, setor ou observação..." oninput="renderHistAvisos('${pref}')" style="margin-bottom:10px">
     <div class="rolagem" id="${pref}-avisos"></div>
   </div>`;
@@ -2263,10 +2316,10 @@ function renderHistAvisos(pref){
     return t.split(' ').every(w => semAcento(campos).includes(w));
   });
   el.innerHTML = lista.length
-    ? `<table><tr><th>Data</th><th>Portaria</th><th>Setor</th><th>Operador</th><th>Morador</th><th>Observação</th><th>Situação</th></tr>
-       ${lista.map(a => `<tr><td>${esc(a['Data/Hora'])}</td><td>${esc(a['Portaria'])}</td><td>${esc(a['Setor'])}</td><td>${esc(a['Operador'])}</td>
+    ? `<table class="hist-av"><tr><th>Data</th><th>Portaria</th><th>Setor</th><th>Operador</th><th>Morador</th><th>Observação</th><th>Situação</th></tr>
+       ${lista.map(a => `<tr onclick="verAviso('${esc(a['Protocolo'])}')"><td>${esc(a['Data/Hora'])}</td><td>${esc(a['Portaria'])}</td><td>${esc(a['Setor'])}</td><td>${esc(a['Operador'])}</td>
          <td>${esc(curto(a['Morador Nome']))}<br><small class="mini">QD ${esc(pq(a['QD']))} / LT ${esc(pq(a['LT']))}</small></td>
-         <td>${esc(a['Observacao'])}</td><td>${avisoFinalizado(a) ? '<span class="sit-fin">' + (String(a['Status']).toUpperCase() === 'EXCLUIDO' ? 'Excluído' : 'Finalizado') + '</span>' : '<span class="sit-ativo">Ativo</span>'}</td></tr>`).join('')}</table>`
+         <td title="${esc(a['Observacao'])}">${esc(a['Observacao'])}</td><td>${avisoFinalizado(a) ? '<span class="sit-fin">' + (String(a['Status']).toUpperCase() === 'EXCLUIDO' ? 'Excluído' : 'Finalizado') + '</span>' : '<span class="sit-ativo">Ativo</span>'}</td></tr>`).join('')}</table>`
     : '<p class="mini">Nenhum aviso encontrado.</p>';
 }
 function renderCadastroAvisos(){ renderHistAvisos('cad'); }
