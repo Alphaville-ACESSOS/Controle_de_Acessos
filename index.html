@@ -1275,7 +1275,8 @@ function renderListaP(){
       pMores.map((m, i) => `<div class="item sel"><div class="flex">
         <div><strong>${esc(curto(nomesDe(m)))}</strong><br><small class="mini">${esc(m['Endereco'])}</small></div>
         <div><span class="qd">${esc(qdLtDe(m))}</span>
-        <button class="btn cinza peq" onclick="removerMorador(${i})">Remover</button></div></div></div>`).join('')
+        <button class="btn cinza peq" onclick="removerMorador(${i})">Remover</button></div></div>
+        <input class="obs-morador" placeholder="Observação deste morador (Enter envia para a Observação)" onkeydown="obsMorador(event, ${i})" style="margin-top:8px"></div>`).join('')
     : '';
   const termo = $('p-busca').value.trim();
   let resultados = '';
@@ -1290,6 +1291,32 @@ function renderListaP(){
   }
   el.innerHTML = resultados + escolhidos;
   if (termo) el.scrollTop = 0;
+}
+// Observação digitada abaixo do morador: vai para o campo Observação, com a QD/LT na frente, em uma nova linha
+function qdPadrao(m){ return pq(m['Quadra (QD)']) + ' ' + pq(m['Lote (LT)']); }
+function obsMorador(e, i){
+  if (e.key !== 'Enter' || e.isComposing) return;
+  e.preventDefault();
+  const el = e.target;
+  const txt = el.value.trim();
+  if (!txt) return;
+  const m = pMores[i];
+  if (!m) return;
+  const linha = qdPadrao(m) + ' - ' + txt;
+  const ta = $('p-obs');
+  ta.value = ta.value.trim() ? ta.value.trimEnd() + '\n' + linha : linha;
+  el.value = '';
+  el.focus();
+}
+// Observações que valem para cada morador: as linhas dele e as gerais (sem QD/LT na frente)
+function obsDoMorador(m){
+  const pref = qdPadrao(m) + ' - ';
+  return $('p-obs').value.split('\n').filter(l => {
+    const s = l.trim();
+    if (!s) return false;
+    if (s.startsWith(pref)) return true;
+    return !/^\d{1,2} \d{1,2} - /.test(s);
+  }).join('\n').trim();
 }
 function buscaPortaria(){
   renderListaP();
@@ -1375,7 +1402,7 @@ async function enviarPortaria(){
           moradorId: m.ID,
           moradorNome: nomesDe(m),
           qd: m['Quadra (QD)'], lt: m['Lote (LT)'], endereco: m['Endereco'],
-          observacoes: $('p-obs').value.trim(),
+          observacoes: obsDoMorador(m),
           operadorNome: me.nome,
           portaria: portaria
         });
@@ -1415,6 +1442,7 @@ function abrirCentral(){
   renderCentral();
   mostrar('central');
 }
+const CORES_PORTARIA = { 'Iguaçu': '#A4C2F4', 'Parati': '#FFD966', 'Andorinhas': '#E06666', 'Araucárias': '#93C47D' };
 // Veículos blindados (somente visualização): lista de todas as portarias, vinda da aba AG_Blindados
 function renderVeiculosCentral(){
   const el = $('ch-veic-wrap');
@@ -1425,7 +1453,7 @@ function renderVeiculosCentral(){
     portarias.map(p => {
       const itens = lista.filter(v => v.Portaria === p);
       if (!itens.length) return '';
-      return `<h3 style="margin:14px 0 6px">${p}</h3><div class="rolagem"><table><tr><th>QD/LT</th><th>Rua</th><th>Morador</th><th>Marca</th><th>Modelo</th><th>Cor</th><th>Placa</th></tr>` +
+      return `<h3 style="margin:14px 0 6px;background:${CORES_PORTARIA[p] || '#E8F5E9'};color:#0A3D17;padding:6px 10px;border-radius:8px">${p}</h3><div class="rolagem"><table><tr><th>QD/LT</th><th>Rua</th><th>Morador</th><th>Marca</th><th>Modelo</th><th>Cor</th><th>Placa</th></tr>` +
         itens.map(v => `<tr><td>${esc(v['QD/LT'])}</td><td>${esc(v.Endereco)}</td><td>${esc(v.Morador)}</td><td>${esc(v.Marca)}</td><td>${esc(v.Modelo)}</td><td>${esc(v.Cor)}</td><td>${esc(v.Placa)}</td></tr>`).join('') +
         `</table></div>`;
     }).join('') + `</div>`;
@@ -1580,7 +1608,8 @@ function saudacao(){
 // Mensagem pronta para o morador, preenchida com os dados do pedido e do cadastro
 function textoMensagem(nomeTitular){
   const visitante = cDet.tipo === 'prot' ? cDet.visitante : (cDet.nome || '');
-  const servico = cDet.tipo === 'prot' ? cDet.assunto : '';
+  const ehVisita = cDet.tipo === 'prot' && String(cDet.assunto || '').trim().toLowerCase() === 'visitante';
+  const servico = cDet.tipo === 'prot' && !ehVisita ? cDet.assunto : '';
   const [emoji, saud] = saudacao();
   const linhas = [
     '🏠 *Associação Alphaville Graciosa Residencial*',
@@ -1588,7 +1617,9 @@ function textoMensagem(nomeTitular){
     emoji + ' ' + saud + ', *' + tratamento(nomeTitular) + ' ' + (nomeTitular || 'morador') + '!*',
     '',
     '🚪 Aqui é a portaria *' + portaria + '*.',
-    visitante
+    ehVisita && visitante
+      ? '👥 Há uma visita para sua residência: *' + visitante + '*'
+      : visitante
       ? '👥 Há uma visita para sua residência: *' + visitante + '*'
       : '👥 Há uma visita para sua residência.'
   ];
